@@ -1,5 +1,5 @@
-from threading import Thread 
-from multiprocessing import Manager, Queue 
+from threading import Thread, Lock
+from multiprocessing import Manager, Queue, Process
 
 class FakeClient(object):
     def __init__(self):
@@ -11,12 +11,14 @@ class FakeClient(object):
 class ErebusHandler(Process):
 
     def __init__(self):
-        super().__init__(self._handling)
+        super().__init__(target=self._handling)
         self.manager = Manager() 
         self.response_queue = Queue()
         self.clients = self.manager.list()
         self.workers = []
         self.responses = self.manager.dict()
+        self.locker = Lock()
+        self.responses_lock = Lock()
     
     def send_process(self):
         while True:
@@ -40,6 +42,7 @@ class ErebusHandler(Process):
         self.clients[idx] = FakeClient()
 
     def client_thread(self, client_socket, idx):
+        print("starting ")
         while True:
             data = client_socket.recv(1024)
             if not data:
@@ -58,7 +61,7 @@ class ErebusHandler(Process):
         try:
             idx = len(self.clients)
             self.clients.append(client_socket)
-            self.workers = Thread(target=self.client_thread, client_socket, idx)
+            self.workers = Thread(target=self.client_thread, args = (client_socket, idx))
             self.workers[-1].start()
         except:
             pass
