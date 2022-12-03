@@ -69,7 +69,6 @@ class ErebusWorker(object):
         
     
     def add_client(self, client_socket):
-        print("adding", client_socket)
         self.queue.put(client_socket)
     
     def start(self):

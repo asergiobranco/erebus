@@ -1,6 +1,6 @@
 from threading import Thread, Lock
 from multiprocessing import Manager, Queue, Process
-
+import msgpack 
 class FakeClient(object):
     def __init__(self):
         pass 
@@ -23,17 +23,20 @@ class ErebusHandler(Process):
     def send_process(self):
         while True:
             data_hash = self.response_queue.get()
-            idx = self.response[data_hash]
+            idx = self.responses[data_hash]
             for i in range(len(self.clients)):
                 try:
-                    self.clients[idx - i].sendall([i, data_hash])
-                except:
+                    self.clients[idx - i].sendall(
+                        msgpack.packb([i, data_hash])
+                    )
+                except Exception as e:
+                    print(e)
                     self.clean_client(idx-i)
     
     def _handling(self):
         p = Process(target=self.send_process)
         p.start()
-        p.joi()
+        p.join()
             
 
     def clean_client(self, idx):
@@ -42,7 +45,7 @@ class ErebusHandler(Process):
         self.clients[idx] = FakeClient()
 
     def client_thread(self, client_socket, idx):
-        print("starting ")
+        print("starting", idx)
         while True:
             data = client_socket.recv(1024)
             if not data:
@@ -53,7 +56,8 @@ class ErebusHandler(Process):
                 self.responses_lock.acquire()
                 #double check
                 if message["data_hash"] not in self.responses:
-                    self.response[message["data_hash"]] = idx
+                    self.responses[message["data_hash"]] = idx
+                    self.response_queue.put(message["data_hash"])
                 self.responses_lock.release()
 
     def add_worker(self, client_socket):
@@ -61,10 +65,10 @@ class ErebusHandler(Process):
         try:
             idx = len(self.clients)
             self.clients.append(client_socket)
-            self.workers = Thread(target=self.client_thread, args = (client_socket, idx))
+            self.workers.append(Thread(target=self.client_thread, args = (client_socket, idx)))
             self.workers[-1].start()
-        except:
-            pass
+        except Exception as e:
+            print(e)
         finally:
             self.locker.release()
 
