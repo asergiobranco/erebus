@@ -1,4 +1,4 @@
-from threading import Thread, Lock
+from threading import Thread, Lock, Timer
 from multiprocessing import Manager, Queue, Process
 import msgpack 
 class FakeClient(object):
@@ -17,23 +17,49 @@ class ErebusHandler(Process):
         self.clients = self.manager.list()
         self.workers = []
         self.responses = self.manager.dict()
+        self.responses["keep_alive"] = 0
+        print(self.responses)
         self.locker = Lock()
         self.responses_lock = Lock()
     
+    def keep_alive(self):
+        print("running timer...")
+        self.response_queue.put("keep_alive")
+        self.start_keep_alive_timer()
+    
+    def start_keep_alive_timer(self):
+        self.keep_alive_timer = Timer(60.0, self.keep_alive)
+        self.keep_alive_timer.start()
+    
+    def reset_keep_alive_timer(self):
+        try:
+            self.keep_alive_timer.cancel()
+        except Exception as e:
+            print(e)
+        finally:
+            self.start_keep_alive_timer()
+
     def send_process(self):
+        print("starting timer")
+        self.start_keep_alive_timer()
         while True:
-            data_hash = self.response_queue.get()
-            idx = self.responses[data_hash]
-            for i in range(len(self.clients)):
-                try:
-                    self.clients[idx - i].sendall(
-                        msgpack.packb([i, data_hash])
-                    )
-                except Exception as e:
-                    print(e)
-                    self.clean_client(idx-i)
+            try:
+                data_hash = self.response_queue.get()
+                self.reset_keep_alive_timer()
+                idx = self.responses[data_hash]
+                for i in range(len(self.clients)):
+                    try:
+                        self.clients[idx - i].sendall(
+                            msgpack.packb([i, data_hash])
+                        )
+                    except Exception as e:
+                        print(e)
+                        self.clean_client(idx-i)
+            except Exception as e:
+                print(e)
     
     def _handling(self):
+        print("starting process")
         p = Process(target=self.send_process)
         p.start()
         p.join()
