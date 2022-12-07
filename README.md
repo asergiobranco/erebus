@@ -1,5 +1,19 @@
 # erebus
 
+```mermaid
+sequenceDiagram
+    participant Worker
+    participant Erebus
+    Worker->>+Erebus: {"program_id" : $PROGRAM_ID}
+    Erebus->>-Worker: { "c" : $CODE, "m" : $MESSAGE}
+    loop Every 60 seconds
+        Erebus->>Worker : [$i, "keep_alive"]
+    end
+    Worker->>+Erebus: {"data_hash" : $DATA_HASH}
+    Erebus->>-Worker: [$i, $DATA_HASH]
+    Note right of Erebus: Every communication is msgpack Serialized
+ ```
+    
 ## Client Example
 
 ```python
